@@ -5,7 +5,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 public class AsServer {
-    public static void main(String[] args)throws IOException  {
+    public static void main(String[] args)throws IOException {
+        DataHolder data = new DataHolder();
+        String name = data.getUserName();
+
         try(ServerSocket server = new ServerSocket(9090)){
             Socket client =  server.accept();
 
@@ -20,12 +23,12 @@ public class AsServer {
             while(!client.isClosed()) {
                 String message = in.readUTF();
 
-                System.out.println("From client message - " + message);
+                System.out.println("From"+ name + " - " + message);
 
                 System.out.println("Server try writing to channel");
 
                 if (message.equalsIgnoreCase("quit")) {
-                    System.out.println("Client disconnected . . .");
+                    System.out.println("Client" + name + " disconnected . . .");
                     out.writeUTF("Server reply - " + message + "- OK");
                     out.flush();
                     try {
@@ -50,6 +53,7 @@ public class AsServer {
             client.close();
 
             System.out.println("Closing connections and channels - DONE");
+            System.out.println("Bye "+ name + ": )");
         }catch (IOException e){
             e.printStackTrace();
         }

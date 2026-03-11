@@ -1,9 +1,14 @@
 import java.io.*;
 import java.net.Socket;
+import java.util.Scanner;
 import java.net.UnknownHostException;
 
 public class Client {
     public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter your name :");
+        String userName = scanner.nextLine();
+
         try (Socket socket = new Socket("localhost", 9090);
              BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
              DataOutputStream oos = new DataOutputStream(socket.getOutputStream());
@@ -36,7 +41,7 @@ public class Client {
                 if (clientCommand != null) {
                     oos.writeUTF(clientCommand);
                     oos.flush();
-                    System.out.println("Client sent message: " + clientCommand);
+                    System.out.println(userName + " sent message: " + clientCommand);
 
                     if (clientCommand.equalsIgnoreCase("quit")) {
                         System.out.println("Closing connection...");
