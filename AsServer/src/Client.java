@@ -9,45 +9,35 @@ public class Client {
         System.out.println("Enter your name :");
         String userName = scanner.nextLine();
 
-        try (Socket socket = new Socket("localhost", 9090);
+        try (Socket socket = new Socket("localhost", 8080);
              BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-             DataOutputStream oos = new DataOutputStream(socket.getOutputStream());
-             DataInputStream ois = new DataInputStream(socket.getInputStream())) {
+             PrintWriter pw = new PrintWriter(socket.getOutputStream(),true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+
+            pw.println(userName);
 
             System.out.println("Client connected to socket.\n");
             System.out.println("Client writing channel = oos & reading channel = ois initialized.");
 
             // Поток для чтения ответов от сервера
             Thread readerThread = new Thread(() -> {
-                try {
-                    while (!socket.isClosed()) {
-                        if (ois.available() > 0) { // Проверяем, есть ли данные
-                            String response = ois.readUTF();
-                            System.out.println("\nServer response: " + response);
-                        }
-                        Thread.sleep(100); // Небольшая задержка
+                try{
+                    String response;
+                    while ((response = in.readLine()) != null){
+                        System.out.println(response);
                     }
-                } catch (IOException | InterruptedException e) {
-                    System.out.println("Reader thread stopped");
+                }catch (IOException e){
+                    System.out.println("Connection closed");
                 }
             });
             readerThread.start();
 
             // Основной цикл для отправки сообщений
-            while (true) {
-                System.out.print("Enter message (or 'quit' to exit): ");
-                String clientCommand = br.readLine();
-
-                if (clientCommand != null) {
-                    oos.writeUTF(clientCommand);
-                    oos.flush();
-                    System.out.println(userName + " sent message: " + clientCommand);
-
-                    if (clientCommand.equalsIgnoreCase("quit")) {
-                        System.out.println("Closing connection...");
-                        Thread.sleep(1000);
-                        break;
-                    }
+            String clientMessage;
+            while ((clientMessage = br.readLine()) != null){
+                pw.println(clientMessage);
+                if(clientMessage.equalsIgnoreCase("quit")){
+                    break;
                 }
             }
 
@@ -58,8 +48,6 @@ public class Client {
             System.err.println("Unknown host: " + e.getMessage());
         } catch (IOException e) {
             System.err.println("IO Error: " + e.getMessage());
-        } catch (InterruptedException e) {
-            System.err.println("Thread interrupted: " + e.getMessage());
         }
     }
 }
