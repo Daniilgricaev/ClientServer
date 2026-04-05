@@ -1,12 +1,16 @@
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 
 public class NioServer{
     private static final int PORT = 8080;
+    private static final HashSet<SocketChannel> clients = new HashSet<>();
+    private static final Map<SocketChannel,String>names = new HashMap<>();
 
     public static void main(String[] args) throws IOException {
+
         ServerSocketChannel serverSocket = ServerSocketChannel.open();
         serverSocket.bind(new InetSocketAddress(PORT));
         serverSocket.configureBlocking(false);
@@ -26,18 +30,43 @@ public class NioServer{
         }
 
     }
+    public static void broadcast(String message, SocketChannel sender){
+        Iterator<SocketChannel>iterator = clients.iterator();
+        while (iterator.hasNext()){
+            SocketChannel client = iterator.next();
+            if(client == sender){
+                continue;
+            }
+            if(client.isOpen()){
+                try{
+                    ByteBuffer buffer = ByteBuffer.wrap((message+"\n").getBytes());
+                    client.write(buffer);
+                }catch (IOException e){
+                    iterator.remove();
+                    names.remove(client);
+                    try {client.close();}catch (IOException ex){}
+                }
+            }else{
+                iterator.remove();
+                try{client.close();}catch (IOException ex){}
+            }
+        }
+    }
     public static void accept(Selector selector, ServerSocketChannel serverSocket) throws IOException{
         SocketChannel client = serverSocket.accept();
-        client.configureBlocking(false);
-        client.register(selector,SelectionKey.OP_READ);
+        clients.add(client);
         System.out.println("New connection " + client.getRemoteAddress());
     }
     private static void handleRequest(SelectionKey key) throws IOException{
         SocketChannel client = (SocketChannel) key.channel();
+        Iterator<SocketChannel> iterator
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int bytesRead = client.read(buffer);
 
         if(bytesRead == -1){
+            String name = names.remove(client);
+            clients.remove(client);
+            broadcast(name + " left the chat ", null);
             client.close();
             return;
         }
