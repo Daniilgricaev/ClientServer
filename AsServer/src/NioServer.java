@@ -19,14 +19,15 @@ public class NioServer{
         serverSocket.register(selector, SelectionKey.OP_ACCEPT);
 
         System.out.println("Server started in port " + PORT);
-
         while(true){
             selector.select();
-            for(SelectionKey key : selector.selectedKeys()){
-                if(key.isAcceptable()) accept(selector, serverSocket);
-                if(key.isReadable()) handleRequest(key);
+            Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+            while (iterator.hasNext()){
+                SelectionKey key = iterator.next();
+                iterator.remove();
+                if(key.isAcceptable()){accept(selector,serverSocket);}
+                if(key.isReadable()){handleRequest(key);}
             }
-            selector.selectedKeys().clear();
         }
 
     }
@@ -55,28 +56,41 @@ public class NioServer{
     public static void accept(Selector selector, ServerSocketChannel serverSocket) throws IOException{
         SocketChannel client = serverSocket.accept();
         clients.add(client);
+        client.configureBlocking(false);
+        client.register(selector, SelectionKey.OP_READ);
+
+        ByteBuffer buffer = ByteBuffer.wrap(("Hello\n Enter your name:").getBytes());
+        client.write(buffer);
+
         System.out.println("New connection " + client.getRemoteAddress());
     }
     private static void handleRequest(SelectionKey key) throws IOException{
         SocketChannel client = (SocketChannel) key.channel();
-        Iterator<SocketChannel> iterator
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         int bytesRead = client.read(buffer);
 
         if(bytesRead == -1){
-            String name = names.remove(client);
+            String name = names.get(client);
+            if(name != null){
+                broadcast(name + " left the chat ", null);
+            }
             clients.remove(client);
-            broadcast(name + " left the chat ", null);
+            names.remove(client);
             client.close();
             return;
         }
 
         buffer.flip();
-        String request = new String(buffer.array(), 0, bytesRead);
-        System.out.println("Request :" + request + "\n");
-        String response = "HTTP/1.1 200 OK\r\nConected-Length: 13\r\n\rHello, Client !";
-        ByteBuffer responseBuffer = ByteBuffer.wrap(response.getBytes());
-        client.write(responseBuffer);
-        client.close();
+        String message = new String(buffer.array(), 0, bytesRead);
+
+        if (!names.containsKey(client)) {
+            names.put(client, message);
+            broadcast(message+ "Joined the chat",client);
+            System.out.println("User "+message+"connected");
+        }else{
+            String userName = names.get(client);
+            broadcast(userName + ": "+ message, client);
+            System.out.println(userName+ ": "+ message);
+        }
     }
 }
