@@ -3,11 +3,17 @@ import java.net.InetSocketAddress;
 import java.util.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class NioServer{
     private static final int PORT = 8080;
-    private static final HashSet<SocketChannel> clients = new HashSet<>();
-    private static final Map<SocketChannel,String>names = new HashMap<>();
+    static final ExecutorService executorService = Executors.newFixedThreadPool(5);
+    private static final Set<SocketChannel> clients = ConcurrentHashMap.newKeySet();
+    private static final Map<SocketChannel,String>names = new ConcurrentHashMap<>();
+    private static final Map<SocketChannel, UserState>states = new ConcurrentHashMap<>();
+    private static final Map<SocketChannel, String>pendingNames = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws IOException {
 
@@ -56,6 +62,7 @@ public class NioServer{
     public static void accept(Selector selector, ServerSocketChannel serverSocket) throws IOException{
         SocketChannel client = serverSocket.accept();
         clients.add(client);
+        states.put(client,UserState.WAITING_NAME);
         client.configureBlocking(false);
         client.register(selector, SelectionKey.OP_READ);
 
@@ -81,16 +88,54 @@ public class NioServer{
         }
 
         buffer.flip();
-        String message = new String(buffer.array(), 0, bytesRead);
+        String data = new String(buffer.array(), 0, bytesRead);
+
+        UserState state = states.get(client);
+
+        if(state == UserState.WAITING_NAME){
+            pendingNames.put(client, data);
+            states.put(client, UserState.WAITING_PASSWORD);
+            ByteBuffer buffer2 = ByteBuffer.wrap(("Enter your password :").getBytes());
+            client.write(buffer2);
+        }
+        if(state == UserState.WAITING_PASSWORD){
+            String name = pendingNames.get(client);
+            executorService.submit(() -> {
+                if(AuthService.check(name, data)){
+                    states.put(client,UserState.AUTHENTICATED);
+                    pendingNames.remove(client);
+                    names.put(client, name);
+                    synchronized (client){
+                        ByteBuffer buffer1 = ByteBuffer.wrap(("Welcome " + name + " to server chat").getBytes());
+                        try {
+                            client.write(buffer1);
+                        }catch (IOException ex){
+                            System.out.println(ex.getMessage());
+                        }
+                    }
+                }else{
+                    System.out.println("Wrong password");
+                    try {
+                        client.close();
+                    }catch(IOException ex){
+                        System.out.println("Wrong password");
+                    }
+                }
+            });
+        }
+        if(state == UserState.AUTHENTICATED){
+            String username = names.get(client);
+            broadcast(username + ':' + data, client);
+        }
 
         if (!names.containsKey(client)) {
-            names.put(client, message);
-            broadcast(message+ "Joined the chat",client);
-            System.out.println("User "+message+"connected");
+            names.put(client, data);
+            broadcast(data+ "Joined the chat",client);
+            System.out.println("User "+data+"connected");
         }else{
             String userName = names.get(client);
-            broadcast(userName + ": "+ message, client);
-            System.out.println(userName+ ": "+ message);
+            broadcast(userName + ": "+ data, client);
+            System.out.println(userName+ ": "+ data);
         }
     }
 }
